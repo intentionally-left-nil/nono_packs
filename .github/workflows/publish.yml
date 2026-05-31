@@ -48,10 +48,19 @@ jobs:
       - uses: always-further/agent-sign@38b94e4e4d2c1b33ad5b8e7c4946e2e77fce7d0a
         with:
           publish: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
-          upload-artifacts: "true"
+          upload-artifacts: "false"
           package-name: npm
           package-namespace: intentionally-left-nil
           package-version: ${{ steps.version.outputs.version }}
           package-path: npm
           registry-url: https://registry.nono.sh/api/v1
           files: ${{ steps.files.outputs.files }}
+
+      # Workaround: agent-sign's upload-artifacts looks for .nono-trust.bundle
+      # at the repo root, but it is generated inside package-path (npm/).
+      # https://github.com/always-further/agent-sign/issues/???
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trust-bundle
+          path: npm/.nono-trust.bundle
