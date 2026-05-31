@@ -1,0 +1,19 @@
+{
+  "extends": "default",
+  "meta": {
+    "name": "npm sandbox",
+    "description": "Allow npm to have access, redirecting caches to sandbox paths"
+  },
+  "groups": {
+    "include": [
+      "deny_credentials"
+    ]
+  },
+  "workdir": {
+    "access": "readwrite"
+  },
+  "filesystem": {
+    "allow": ["$XDG_CACHE_HOME/nono_sandbox/npm_cache"],
+    "read": ["$XDG_CONFIG_HOME/nono_sandbox/.npmrc"]
+  }
+}

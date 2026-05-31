@@ -1,0 +1,12 @@
+{
+  "session_hooks": {
+    "before": {
+      "script": "$PACK_DIR/hooks/before-hook.sh",
+      "timeout_secs": 30
+    },
+    "after": {
+      "script": "$PACK_DIR/hooks/after-hook.sh",
+      "timeout_secs": 10
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "name": "npm",
+  "version": "0.0.1",
+  "description": "Provides access to npm, isolating build artifacts to sandbox-specific paths",
+  "license": "MIT",
+  "platforms": [
+    "macos",
+    "linux"
+  ],
+  "min_nono_version": "0.59.0",
+  "keywords": [
+    "nono",
+    "sandbox",
+    "security",
+    "capabilities",
+    "credentials",
+    "npm"
+  ],
+  "artifacts": [
+    {
+      "type": "profile",
+      "path": "policy.json",
+      "install_as": "npm_sandbox"
+    },
+    {
+      "type": "plugin",
+      "path": "README.md"
+    },
+    {
+      "type": "plugin",
+      "path": "hooks/before-hook.sh"
+    },
+    {
+      "type": "plugin",
+      "path": "hooks/after-hook.sh"
+    },
+    {
+      "type": "plugin",
+      "path": "sandbox.npmrc"
+    },
+    {
+      "type": "plugin",
+      "path": "patches/session_hooks.json"
+    },
+    {
+      "type": "plugin",
+      "path": "disabled.npmrc"
+    }
+  ],
+  "wiring": [
+    {
+      "type": "symlink",
+      "link": "$HOME/nono-disabled.npmrc",
+      "target": "$PACK_DIR/disabled.npmrc"
+    },
+    {
+      "type": "write_file",
+      "source": "sandbox.npmrc",
+      "dest": "$HOME/.config/nono_sandbox/.npmrc"
+    },
+    {
+      "type": "json_merge",
+      "file": "$PACK_DIR/profiles/npm_sandbox.json",
+      "patch": "patches/session_hooks.json"
+    }
+  ]
+}
