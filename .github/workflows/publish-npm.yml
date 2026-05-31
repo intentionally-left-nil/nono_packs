@@ -1,0 +1,55 @@
+name: Publish npm pack
+
+on:
+  push:
+    tags: ["npm-v*"]
+  workflow_dispatch:
+
+# OIDC identity is pinned to this exact file path.
+# The trusted publisher entry in the registry must match this workflow path
+# and the ref pattern refs/tags/npm-v*
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from package.json
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -r '.version' npm/package.json)
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "ERROR: npm/package.json is missing a 'version' field"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build files list from package.json
+        id: files
+        run: |
+          set -euo pipefail
+          {
+            echo "package.json"
+            [ -f "npm/README.md" ] && echo "README.md"
+            jq -r '.artifacts[].path' "npm/package.json"
+          } | sort -u > /tmp/files.txt
+          {
+            echo "files<<EOF"
+            cat /tmp/files.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: always-further/agent-sign@38b94e4e4d2c1b33ad5b8e7c4946e2e77fce7d0a
+        with:
+          publish: "true"
+          package-name: npm
+          package-namespace: intentionally-left-nil
+          package-version: ${{ steps.version.outputs.version }}
+          package-path: npm
+          registry-url: https://registry.nono.sh/api/v1
+          files: ${{ steps.files.outputs.files }}
