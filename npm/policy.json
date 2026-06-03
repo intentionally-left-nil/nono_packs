@@ -18,11 +18,11 @@
   },
   "session_hooks": {
     "before": {
-      "script": "/hooks/before-hook.sh",
+      "script": "$PACK_DIR/hooks/before-hook.sh",
       "timeout_secs": 30
     },
     "after": {
-      "script": "/hooks/after-hook.sh",
+      "script": "$PACK_DIR/hooks/after-hook.sh",
       "timeout_secs": 10
     }
   }
