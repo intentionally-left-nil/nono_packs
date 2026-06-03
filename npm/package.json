@@ -41,10 +41,6 @@
     },
     {
       "type": "plugin",
-      "path": "patches/session_hooks.json"
-    },
-    {
-      "type": "plugin",
       "path": "disabled.npmrc"
     }
   ],
@@ -58,11 +54,6 @@
       "type": "write_file",
       "source": "sandbox.npmrc",
       "dest": "$HOME/.config/nono_sandbox/.npmrc"
-    },
-    {
-      "type": "json_merge",
-      "file": "$PACK_DIR/profiles/npm_sandbox.json",
-      "patch": "patches/session_hooks.json"
     }
   ]
 }
