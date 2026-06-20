@@ -48,6 +48,38 @@ def test_stdlib_works(sandbox):
 
 
 # ---------------------------------------------------------------------------
+# 1b. "works" — C-extension stdlib imports work inside the sandbox
+# ---------------------------------------------------------------------------
+
+
+def test_cext_imports(sandbox):
+    """
+    The sandbox must allow importing C-extension stdlib modules that require
+    access to shared libraries (e.g. _json, _csv, _hashlib).
+
+    These modules are backed by .so files inside the prefix and exercise
+    shared-library loading within the sandbox.
+    """
+    result = sandbox(
+        """
+        import _json, _csv, _hashlib
+        print("CEXT_OK")
+        """
+    )
+
+    assert result.returncode == 0, (
+        f"Expected exit 0 but got {result.returncode}.\n"
+        f"stdout: {result.stdout!r}\n"
+        f"stderr: {result.stderr!r}"
+    )
+    assert "CEXT_OK" in result.stdout, (
+        f"Marker not found in stdout.\n"
+        f"stdout: {result.stdout!r}\n"
+        f"stderr: {result.stderr!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # 2. "doesn't work" — sandbox blocks writes to /tmp
 # ---------------------------------------------------------------------------
 
