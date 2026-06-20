@@ -105,6 +105,7 @@
       "JUPYTER_RUNTIME_DIR":     "$PREFIX/tmp/jupyter/runtime",
       "JUPYTER_DATA_DIR":        "$PREFIX/share/jupyter",
       "JUPYTER_CONFIG_DIR":      "$PREFIX/tmp/jupyter/config",
+      "IPYTHONDIR":              "$PREFIX/tmp/ipython",
       "MPLCONFIGDIR":            "$PREFIX/tmp/matplotlib",
       "NUMBA_CACHE_DIR":         "$PREFIX/tmp/numba",
       "TRITON_CACHE_DIR":        "$PREFIX/tmp/triton",

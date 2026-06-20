@@ -42,6 +42,7 @@ mkdir -p \
     "$PREFIX/tmp/pip" \
     "$PREFIX/tmp/jupyter/runtime" \
     "$PREFIX/tmp/jupyter/config" \
+    "$PREFIX/tmp/ipython" \
     "$PREFIX/tmp/matplotlib" \
     "$PREFIX/tmp/numba" \
     "$PREFIX/tmp/triton" \
