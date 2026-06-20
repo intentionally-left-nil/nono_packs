@@ -300,30 +300,14 @@ the sandbox and that internal env vars are cleaned up correctly.
   ```
   Expected: exits 0, prints `SUBPROCESS_OK`.
 
-- `PYBOX_ORIGINAL_ARGV0` is not visible in the child's environment (the
-  launcher is responsible for stripping it, but we verify it is absent in case
-  it leaked):
-  ```python
-  import subprocess, sys, os
-  result = subprocess.run(
-      [sys.executable, "-c",
-       "import os; print(os.environ.get('PYBOX_ORIGINAL_ARGV0', '__ABSENT__'))"],
-      capture_output=True, text=True, timeout=10
-  )
-  assert "__ABSENT__" in result.stdout, f"leaked: {result.stdout.strip()!r}"
-  print("ARGV0_ABSENT_OK")
-  ```
-  Expected: exits 0, prints `ARGV0_ABSENT_OK`.
-
 ---
 
 ### 9. Virtual environment compatibility
 
 **Goal:** Confirm that a venv built on top of the test prefix is detected
 correctly by CPython — i.e. `sys.prefix` points at the inner venv, not the
-base prefix. This exercises the `PYBOX_ORIGINAL_ARGV0` carry mechanism
-end-to-end once the feedstock launcher is in place; for now it validates that
-the profile does not interfere with standard venv behaviour.
+base prefix. Validates that the profile does not interfere with standard venv
+behaviour.
 
 Create a nested venv before running these tests:
 
