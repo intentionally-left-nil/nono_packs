@@ -1,0 +1,121 @@
+{
+  "extends": "default",
+
+  "meta": {
+    "name": "python-sandbox",
+    "version": "0.1.0",
+    "description": "Sandboxed Python environment with pip package installation support"
+  },
+
+  "groups": {
+    "exclude": [
+      "dangerous_commands",
+      "dangerous_commands_macos",
+      "dangerous_commands_linux"
+    ]
+  },
+
+  "workdir": { "access": "readwrite" },
+
+  "filesystem": {
+    "allow": ["$PREFIX"],
+
+    "read": [
+      { "path": "$HOME/.CFUserTextEncoding", "when": "macos" },
+      "$HOME/.terminfo",
+      "/usr/share/zoneinfo",
+      { "path": "/var/db/timezone", "when": "macos" },
+      "/tmp"
+    ]
+  },
+
+  "security": {
+    "ipc_mode": "full"
+  },
+
+  "network": { "block": false },
+
+  "environment": {
+    "allow_vars": [
+      "PYBOX_ORIGINAL_ARGV0",
+      "CONDA_PYTHON_PROFILE",
+      "PYBOX_PACK_VERSION",
+
+      "CONDA_PREFIX",
+      "VIRTUAL_ENV",
+      "VIRTUAL_ENV_PROMPT",
+      "MAMBA_*",
+      "PIXI_*",
+      "INIT_CWD",
+
+      "PATH",
+      "HOME",
+      "USER",
+      "LOGNAME",
+      "LANG",
+      "LC_*",
+      "TERM",
+      "COLORTERM",
+      "TERM_PROGRAM",
+
+      "DISPLAY",
+      "WAYLAND_DISPLAY",
+
+      "TMPDIR",
+      "TMP",
+      "TEMP",
+
+      "PYTHONPYCACHEPREFIX",
+      "PYTHONDONTWRITEBYTECODE",
+      "PYTHONSTARTUP",
+
+      "PIP_CACHE_DIR",
+      "PIP_INDEX_URL",
+      "PIP_EXTRA_INDEX_URL",
+
+      "MPLCONFIGDIR",
+      "NUMBA_CACHE_DIR",
+      "TRITON_CACHE_DIR",
+      "TORCHINDUCTOR_CACHE_DIR",
+
+      "HF_HOME",
+      "HF_HUB_CACHE",
+      "TRANSFORMERS_CACHE",
+      "TORCH_HOME",
+
+      "XDG_CACHE_HOME",
+      "XDG_CONFIG_HOME",
+      "XDG_DATA_HOME",
+      "XDG_STATE_HOME",
+      "XDG_RUNTIME_DIR",
+
+      "JUPYTER_CONFIG_DIR",
+      "JUPYTER_DATA_DIR",
+      "JUPYTER_RUNTIME_DIR",
+      "JUPYTER_PATH",
+      "IPYTHONDIR"
+    ],
+
+    "set_vars": {
+      "TMPDIR":                  "$PREFIX/tmp",
+      "TMP":                     "$PREFIX/tmp",
+      "TEMP":                    "$PREFIX/tmp",
+      "PYTHONPYCACHEPREFIX":     "$PREFIX/__pycache__",
+      "PIP_CACHE_DIR":           "$PREFIX/tmp/pip",
+      "JUPYTER_RUNTIME_DIR":     "$PREFIX/tmp/jupyter/runtime",
+      "JUPYTER_DATA_DIR":        "$PREFIX/share/jupyter",
+      "JUPYTER_CONFIG_DIR":      "$PREFIX/tmp/jupyter/config",
+      "MPLCONFIGDIR":            "$PREFIX/tmp/matplotlib",
+      "NUMBA_CACHE_DIR":         "$PREFIX/tmp/numba",
+      "TRITON_CACHE_DIR":        "$PREFIX/tmp/triton",
+      "TORCHINDUCTOR_CACHE_DIR": "$PREFIX/tmp/torch_inductor"
+    }
+  },
+
+  "session_hooks": {
+    "before": {
+      "script": "$PACK_DIR/hooks/before.sh",
+      "timeout_secs": 30
+    }
+  }
+}

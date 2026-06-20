@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "name": "python",
+  "version": "0.1.0",
+  "description": "Sandboxed Python environment with pip package installation support",
+  "license": "MIT",
+  "platforms": [
+    "macos",
+    "linux"
+  ],
+  "min_nono_version": "0.64.0",
+  "keywords": [
+    "nono",
+    "sandbox",
+    "python",
+    "conda",
+    "security",
+    "capabilities"
+  ],
+  "artifacts": [
+    {
+      "type": "profile",
+      "path": "policy.json",
+      "install_as": "python-sandbox"
+    },
+    {
+      "type": "plugin",
+      "path": "hooks/before.sh"
+    },
+    {
+      "type": "plugin",
+      "path": "README.md"
+    }
+  ]
+}
