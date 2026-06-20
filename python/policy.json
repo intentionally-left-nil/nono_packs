@@ -25,7 +25,8 @@
       "$HOME/.terminfo",
       "/usr/share/zoneinfo",
       { "path": "/var/db/timezone", "when": "macos" },
-      "/tmp"
+      "/tmp",
+      "$HOME/.nvm"
     ]
   },
 
