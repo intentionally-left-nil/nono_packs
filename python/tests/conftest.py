@@ -8,15 +8,33 @@ the nono sandbox wraps during tests.
 
 Key design points
 -----------------
-- ``python_prefix``  — session-scoped; creates /tmp/nono-pypack-test, tears
-                       it down after the session.
-- ``patched_policy`` — session-scoped; sideloads the pack then patches
-                       ``$PREFIX`` in the *installed* profile (in the pack
-                       store), so nono resolves the profile by name and can
-                       expand ``$PACK_DIR`` in session_hooks normally.
-- ``sandbox``        — session-scoped callable; thin wrapper around
-                       ``nono-sideload run`` using the profile name, not a
-                       file path.
+- ``python_prefix``    — session-scoped; creates /tmp/nono-pypack-test, tears
+                         it down after the session.
+- ``patched_policy``   — session-scoped; sideloads the pack then patches
+                         ``$PREFIX`` in the *installed* profile (in the pack
+                         store), so nono resolves the profile by name and can
+                         expand ``$PACK_DIR`` in session_hooks normally.
+- ``sandbox``          — session-scoped ``SandboxHandle``; exposes three ways
+                         to run code inside the nono sandbox:
+
+                         sandbox(code, *, extra_env, extra_allow, timeout)
+                             Run ``python -c <code>``; return CompletedProcess.
+
+                         sandbox.popen(argv, *, extra_env, extra_allow, cwd,
+                                       **kwargs) → Popen
+                             Same invocation prefix, but appends *argv* (e.g.
+                             ``["-m", "uvicorn", "app:app", ...]``) and returns
+                             a ``subprocess.Popen`` handle.  Caller owns the
+                             process lifecycle.
+
+                         sandbox.run_in(python_bin, argv, *, extra_env,
+                                        extra_allow, timeout) → CompletedProcess
+                             Like the callable but uses an arbitrary
+                             ``python_bin`` instead of the default prefix
+                             python.
+
+- ``third_party_deps`` — session-scoped; installs fastapi, uvicorn, requests
+                         into the test prefix (idempotent).
 """
 
 from __future__ import annotations
@@ -129,14 +147,196 @@ def patched_policy(python_prefix: Path, sideloaded_pack: None) -> Generator[str,
 
 
 # ---------------------------------------------------------------------------
+# SandboxHandle — callable + .popen() + .run_in()
+# ---------------------------------------------------------------------------
+
+
+class SandboxHandle:
+    """
+    Thin wrapper around ``nono-sideload run`` that provides three calling
+    conventions:
+
+    * ``handle(code, ...)``                  — run ``python -c <code>``
+    * ``handle.popen(argv, ...)``            — ``Popen`` for long-running procs
+    * ``handle.run_in(python_bin, argv, ...)`` — run with a different python
+    """
+
+    def __init__(self, profile: str, python_prefix: Path) -> None:
+        self._profile = profile
+        self._prefix = python_prefix
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _base_cmd(self, extra_allow: list[str] | None = None) -> list[str]:
+        """Build the ``nono run --profile … --allow …`` prefix."""
+        cmd = [
+            NONO, "run",
+            "--profile", self._profile,
+            "--allow", str(self._prefix),
+        ]
+        for path in (extra_allow or []):
+            cmd += ["--allow", str(path)]
+        return cmd
+
+    def _base_env(self, extra_env: dict[str, str] | None = None) -> dict[str, str]:
+        """Build the environment dict with CONDA_PREFIX / TMPDIR set."""
+        env = os.environ.copy()
+        env["CONDA_PREFIX"] = str(self._prefix)
+        env["TMPDIR"] = str(self._prefix / "tmp")
+        if extra_env:
+            env.update(extra_env)
+        return env
+
+    # ------------------------------------------------------------------
+    # Primary callable: run python -c <code>
+    # ------------------------------------------------------------------
+
+    def __call__(
+        self,
+        code: str,
+        *,
+        extra_env: dict[str, str] | None = None,
+        extra_allow: list[str] | None = None,
+        timeout: int = 30,
+    ) -> subprocess.CompletedProcess:
+        """
+        Run ``python -c <code>`` inside the nono sandbox.
+
+        Parameters
+        ----------
+        code:
+            Python source passed to ``python -c``.  Leading indentation is
+            stripped via ``textwrap.dedent``.
+        extra_env:
+            Extra variables merged into the parent environment before invoking
+            nono-sideload.
+        extra_allow:
+            Additional ``--allow <path>`` flags.
+        timeout:
+            Seconds before the subprocess is killed (default 30).
+        """
+        python_bin = self._prefix / "bin" / "python"
+        cmd = self._base_cmd(extra_allow) + ["--", str(python_bin), "-c", textwrap.dedent(code)]
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=self._base_env(extra_env),
+        )
+
+    # ------------------------------------------------------------------
+    # .popen() — long-running background process
+    # ------------------------------------------------------------------
+
+    def popen(
+        self,
+        argv: list[str],
+        *,
+        extra_env: dict[str, str] | None = None,
+        extra_allow: list[str] | None = None,
+        cwd: str | None = None,
+        **kwargs,
+    ) -> subprocess.Popen:
+        """
+        Start a long-running sandboxed process via ``subprocess.Popen``.
+
+        Parameters
+        ----------
+        argv:
+            Arguments appended after ``--`` in the nono invocation.  The first
+            element is treated as a python flag/module (e.g. ``["-m", "uvicorn",
+            "app:app", ...]``); the default python binary from the prefix is
+            used as the executable.
+        extra_env:
+            Extra variables merged into the environment.
+        extra_allow:
+            Additional ``--allow <path>`` flags.
+        cwd:
+            Working directory for the child process.
+        **kwargs:
+            Forwarded verbatim to ``subprocess.Popen`` (e.g. ``stdout``,
+            ``stderr``).
+
+        Returns
+        -------
+        subprocess.Popen
+            The caller owns the process lifecycle (terminate / wait / kill).
+        """
+        python_bin = self._prefix / "bin" / "python"
+        cmd = self._base_cmd(extra_allow) + ["--", str(python_bin)] + list(argv)
+
+        popen_kwargs: dict = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+        }
+        popen_kwargs.update(kwargs)
+
+        if cwd is not None:
+            popen_kwargs["cwd"] = cwd
+
+        return subprocess.Popen(
+            cmd,
+            env=self._base_env(extra_env),
+            **popen_kwargs,
+        )
+
+    # ------------------------------------------------------------------
+    # .run_in() — run with an arbitrary python binary
+    # ------------------------------------------------------------------
+
+    def run_in(
+        self,
+        python_bin: Path | str,
+        argv: list[str],
+        *,
+        extra_env: dict[str, str] | None = None,
+        extra_allow: list[str] | None = None,
+        timeout: int = 30,
+    ) -> subprocess.CompletedProcess:
+        """
+        Run ``<python_bin> <argv>`` inside the nono sandbox.
+
+        Like the primary callable but uses *python_bin* instead of the prefix's
+        default ``bin/python``.  Useful for testing nested venvs or other
+        interpreter paths.
+
+        Parameters
+        ----------
+        python_bin:
+            Absolute path to the Python interpreter to invoke.
+        argv:
+            Arguments passed to *python_bin* (e.g. ``["-c", "print('hi')"]``
+            or ``["-m", "pytest"]``).
+        extra_env:
+            Extra variables merged into the environment.
+        extra_allow:
+            Additional ``--allow <path>`` flags.
+        timeout:
+            Seconds before the subprocess is killed (default 30).
+        """
+        cmd = self._base_cmd(extra_allow) + ["--", str(python_bin)] + list(argv)
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=self._base_env(extra_env),
+        )
+
+
+# ---------------------------------------------------------------------------
 # Fixture: sandbox callable
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture(scope="session")
-def sandbox(patched_policy: str, python_prefix: Path):
+def sandbox(patched_policy: str, python_prefix: Path) -> SandboxHandle:
     """
-    Return a callable that runs Python code inside the nono sandbox.
+    Return a :class:`SandboxHandle` that runs Python code inside the nono
+    sandbox.
 
     Usage::
 
@@ -145,50 +345,58 @@ def sandbox(patched_policy: str, python_prefix: Path):
             assert result.returncode == 0
             assert "hello" in result.stdout
 
-    Parameters accepted by the returned callable
-    ---------------------------------------------
-    code : str
-        Python source passed to ``python -c``.  Leading indentation is
-        stripped via ``textwrap.dedent``.
-    extra_env : dict[str, str] | None
-        Extra variables merged into the parent environment before invoking
-        nono-sideload.  The sandbox's own allow_vars / set_vars apply on top.
-    extra_allow : list[str] | None
-        Additional ``--allow <path>`` flags.
-    timeout : int
-        Seconds before the subprocess is killed (default 30).
+        def test_server(sandbox):
+            proc = sandbox.popen(["-m", "uvicorn", "app:app", ...])
+            ...
+            proc.terminate()
+
+        def test_venv(sandbox, python_prefix):
+            venv_python = Path("/tmp/myvenv/bin/python")
+            result = sandbox.run_in(venv_python, ["-c", "print('hi')"],
+                                    extra_allow=["/tmp/myvenv"])
     """
+    return SandboxHandle(patched_policy, python_prefix)
 
-    def _run(
-        code: str,
-        *,
-        extra_env: dict[str, str] | None = None,
-        extra_allow: list[str] | None = None,
-        timeout: int = 30,
-    ) -> subprocess.CompletedProcess:
-        python_bin = python_prefix / "bin" / "python"
 
-        cmd = [
-            NONO, "run",
-            "--profile", patched_policy,
-            "--allow", str(python_prefix),
-        ]
-        for path in (extra_allow or []):
-            cmd += ["--allow", path]
-        cmd += ["--", str(python_bin), "-c", textwrap.dedent(code)]
+# ---------------------------------------------------------------------------
+# Fixture: third-party dependencies (fastapi, uvicorn, requests)
+# ---------------------------------------------------------------------------
 
-        env = os.environ.copy()
-        env["CONDA_PREFIX"] = str(python_prefix)
-        env["TMPDIR"] = str(python_prefix / "tmp")
-        if extra_env:
-            env.update(extra_env)
 
-        return subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
+@pytest.fixture(scope="session")
+def third_party_deps(python_prefix: Path, patched_policy: str) -> None:
+    """
+    Ensure fastapi, uvicorn, and requests are installed in the test prefix.
+
+    Depends on ``patched_policy`` to guarantee the prefix exists and the pack
+    is sideloaded before this fixture runs.  Tries conda first (with
+    ``--override-channels -c defaults``), falls back to pip.  Idempotent:
+    checks whether the packages are already importable before attempting any
+    install.
+    """
+    python_bin = python_prefix / "bin" / "python"
+
+    # Fast-path: already installed.
+    check = subprocess.run(
+        [str(python_bin), "-c", "import fastapi, uvicorn, requests"],
+        capture_output=True,
+    )
+    if check.returncode == 0:
+        return
+
+    if CONDA:
+        subprocess.run(
+            [
+                CONDA, "install", "-p", str(python_prefix),
+                "--override-channels", "-c", "defaults",
+                "fastapi", "uvicorn", "requests",
+                "--yes", "--quiet",
+            ],
+            check=True,
         )
-
-    return _run
+    else:
+        subprocess.run(
+            [str(python_bin), "-m", "pip", "install", "--quiet",
+             "fastapi", "uvicorn[standard]", "requests"],
+            check=True,
+        )

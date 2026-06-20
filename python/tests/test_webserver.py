@@ -37,57 +37,6 @@ from pathlib import Path
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-TEST_PREFIX = Path("/tmp/nono-pypack-test")
-PROFILE_NAME = "intentionally-left-nil/python"
-NONO = shutil.which("nono-sideload") or "nono-sideload"
-CONDA = shutil.which("conda")
-
-
-# ---------------------------------------------------------------------------
-# Session-scoped fixture: ensure fastapi and uvicorn are installed
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def webserver_deps(patched_policy: str) -> None:
-    """
-    Ensure fastapi and uvicorn are installed in the test prefix.
-
-    Depends on ``patched_policy`` to guarantee the prefix exists and
-    the pack is sideloaded before this fixture runs.  Tries conda first,
-    falls back to pip.
-    """
-    python_bin = TEST_PREFIX / "bin" / "python"
-
-    # Fast-path: already installed.
-    check = subprocess.run(
-        [str(python_bin), "-c", "import fastapi, uvicorn"],
-        capture_output=True,
-    )
-    if check.returncode == 0:
-        return
-
-    if CONDA:
-        subprocess.run(
-            [
-                CONDA, "install", "-p", str(TEST_PREFIX),
-                "--override-channels", "-c", "defaults",
-                "fastapi", "uvicorn",
-                "--yes", "--quiet",
-            ],
-            check=True,
-        )
-    else:
-        subprocess.run(
-            [str(python_bin), "-m", "pip", "install", "--quiet",
-             "fastapi", "uvicorn[standard]"],
-            check=True,
-        )
-
 # Minimal FastAPI app written to a temp dir before starting the server.
 APP_SOURCE = textwrap.dedent("""\
     from fastapi import FastAPI, Response
@@ -176,7 +125,7 @@ def _http_get(url: str) -> tuple[int, bytes]:
 # ---------------------------------------------------------------------------
 
 
-def test_webserver_blocked_write_survives(webserver_deps: None) -> None:
+def test_webserver_blocked_write_survives(sandbox, third_party_deps: None) -> None:
     """
     Start a FastAPI/uvicorn server inside the nono sandbox, confirm:
       1. GET /        → HTTP 200
@@ -202,30 +151,13 @@ def test_webserver_blocked_write_survives(webserver_deps: None) -> None:
         port = _free_port()
         base_url = f"http://127.0.0.1:{port}"
 
-        python_bin = str(TEST_PREFIX / "bin" / "python")
-
-        cmd = [
-            NONO, "run",
-            "--profile", PROFILE_NAME,
-            "--allow", str(TEST_PREFIX),
-            "--allow", server_cwd,
-            "--",
-            python_bin, "-m", "uvicorn", "app:app",
-            "--host", "127.0.0.1",
-            "--port", str(port),
-            "--log-level", "warning",
-        ]
-
-        env = os.environ.copy()
-        env["CONDA_PREFIX"] = str(TEST_PREFIX)
-        env["TMPDIR"] = str(TEST_PREFIX / "tmp")
-
-        proc = subprocess.Popen(
-            cmd,
+        proc = sandbox.popen(
+            ["-m", "uvicorn", "app:app",
+             "--host", "127.0.0.1",
+             "--port", str(port),
+             "--log-level", "warning"],
+            extra_allow=[server_cwd],
             cwd=server_cwd,
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
         )
 
         try:
