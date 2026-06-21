@@ -39,6 +39,7 @@
   "environment": {
     "allow_vars": [
       "CONDA_PYTHON_PROFILE",
+      "_CONDA_PYTHON_ARGV0",
       "PYBOX_PACK_VERSION",
 
       "CONDA_PREFIX",

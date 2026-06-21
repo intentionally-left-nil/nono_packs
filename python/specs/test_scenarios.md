@@ -656,3 +656,38 @@ After either attack, confirm from outside the sandbox:
 - `site-packages/evil.pth` does not exist.
 - A normal sandboxed Python invocation still works and still blocks writes to
   `/tmp` (sandbox is still functional).
+
+---
+
+## Scenario 17: pip install happy path
+
+**File:** `tests/test_pip_install.py`
+
+Confirms that a normal `pip install` works inside the sandbox — verifying that
+the `$PREFIX` write grant is broad enough for pip to write into
+`$PREFIX/lib/pythonX.Y/site-packages/` and create entry-points in
+`$PREFIX/bin/`.
+
+Uses `cowsay` (tiny, pure-Python, no transitive deps, no C extensions) so the
+test is fast and exercises only the filesystem write path.
+
+### 17a. pip install
+
+```sh
+nono-sideload run --profile /tmp/pybox-test-policy.json \
+    --allow $PREFIX \
+    -- $PREFIX/bin/pip install cowsay --quiet
+```
+
+Expected: exit 0; `cowsay` is importable inside a subsequent sandboxed Python
+invocation.
+
+### 17b. pip uninstall
+
+```sh
+nono-sideload run --profile /tmp/pybox-test-policy.json \
+    --allow $PREFIX \
+    -- $PREFIX/bin/pip uninstall cowsay --yes
+```
+
+Expected: exit 0; `cowsay` is no longer importable inside the sandbox.

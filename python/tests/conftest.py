@@ -88,7 +88,7 @@ def python_prefix() -> Generator[Path, None, None]:
         subprocess.run(
             [CONDA, "create", "-p", str(prefix),
              "--override-channels", "-c", "defaults",
-             "python=3.12", "--yes", "--quiet"],
+             "python=3.12", "pip", "--yes", "--quiet"],
             check=True,
         )
     else:
