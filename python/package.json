@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "python",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Sandboxed Python environment with pip package installation support",
   "license": "MIT",
   "platforms": [
