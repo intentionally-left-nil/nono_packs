@@ -15,8 +15,6 @@
     ]
   },
 
-  "workdir": { "access": "readwrite" },
-
   "filesystem": {
     "allow": ["$PREFIX"],
 

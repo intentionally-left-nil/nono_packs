@@ -1,8 +1,13 @@
 """
-Scenario 2: Working-directory read and write.
+Scenario 2: Working-directory read and write via explicit --allow.
 
-Confirms that ``workdir: readwrite`` grants the sandboxed process access to
-the current working directory.
+Confirms that passing CWD explicitly via ``extra_allow`` (i.e. ``--allow
+<cwd>`` on the nono-sideload command line) grants the sandboxed process access
+to the current working directory.
+
+The profile does NOT set ``workdir: readwrite`` — CWD access is opt-in and
+must be granted explicitly by the caller. These tests verify that the
+explicit-allow path works correctly.
 
 Tests:
 
@@ -24,13 +29,12 @@ from pathlib import Path
 
 def test_cwd_write_read_unlink(sandbox):
     """
-    The sandbox must allow the sandboxed process to write a file into CWD,
-    read it back, and delete it.
+    When CWD is explicitly allowed via ``extra_allow``, the sandbox must
+    permit writing a file into CWD, reading it back, and deleting it.
 
-    The ``workdir: readwrite`` policy directive should grant full read/write
-    access to whatever directory the process has as its CWD at runtime.
-    We pass the CWD explicitly via ``extra_allow`` because nono skips the CWD
-    prompt in non-interactive mode (``--allow-cwd`` is not set by the harness).
+    The profile does not grant CWD access; ``extra_allow=[cwd]`` translates
+    to ``--allow <cwd>`` on the nono-sideload command line, which is the
+    intended mechanism for callers that need working-directory access.
     """
     cwd = os.getcwd()
     result = sandbox(
@@ -65,12 +69,12 @@ def test_cwd_write_read_unlink(sandbox):
 def test_cwd_read_existing(sandbox):
     """
     A file created by the pytest process (outside the sandbox) in CWD must be
-    readable from inside the sandbox.
+    readable from inside the sandbox when CWD is explicitly allowed.
 
     We create a sentinel file in ``os.getcwd()`` (the pytest process's CWD,
     which is the same directory the sandboxed process will inherit), then
-    confirm the sandbox can open and read it.  The file is cleaned up
-    unconditionally in a ``finally`` block.
+    confirm the sandbox can open and read it via ``extra_allow=[str(sentinel.parent)]``.
+    The file is cleaned up unconditionally in a ``finally`` block.
     """
     sentinel = Path(os.getcwd()) / "sandbox_read_existing_test.txt"
     sentinel_content = "sentinel-content-42"

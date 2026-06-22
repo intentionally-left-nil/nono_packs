@@ -30,6 +30,17 @@
     {
       "type": "plugin",
       "path": "README.md"
+    },
+    {
+      "type": "plugin",
+      "path": "skills/python-sandbox/SKILL.md"
+    }
+  ],
+  "wiring": [
+    {
+      "type": "symlink",
+      "link": "$HOME/.config/opencode/skills/python-sandbox",
+      "target": "$PACK_DIR/skills/python-sandbox"
     }
   ]
 }
