@@ -69,6 +69,7 @@
       "PYTHONPYCACHEPREFIX",
       "PYTHONDONTWRITEBYTECODE",
       "PYTHONSTARTUP",
+      "PYTHON_HISTORY",
 
       "PIP_CACHE_DIR",
       "PIP_INDEX_URL",
@@ -102,6 +103,7 @@
       "TMP":                     "$PREFIX/tmp",
       "TEMP":                    "$PREFIX/tmp",
       "PYTHONPYCACHEPREFIX":     "$PREFIX/__pycache__",
+      "PYTHON_HISTORY":          "$PREFIX/tmp/.python_history",
       "PIP_CACHE_DIR":           "$PREFIX/tmp/pip",
       "JUPYTER_RUNTIME_DIR":     "$PREFIX/tmp/jupyter/runtime",
       "JUPYTER_DATA_DIR":        "$PREFIX/share/jupyter",
