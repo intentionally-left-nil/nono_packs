@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "python",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Sandboxed Python environment with pip package installation support",
   "license": "MIT",
   "platforms": [
@@ -34,6 +34,10 @@
     {
       "type": "plugin",
       "path": "skills/python-sandbox/SKILL.md"
+    },
+    {
+      "type": "plugin",
+      "path": "skills/env-secrets/SKILL.md"
     }
   ],
   "wiring": [
@@ -41,6 +45,11 @@
       "type": "symlink",
       "link": "$HOME/.config/opencode/skills/python-sandbox",
       "target": "$PACK_DIR/skills/python-sandbox"
+    },
+    {
+      "type": "symlink",
+      "link": "$HOME/.config/opencode/skills/env-secrets",
+      "target": "$PACK_DIR/skills/env-secrets"
     }
   ]
 }

@@ -1,45 +1,51 @@
 ---
 name: python-sandbox
-description: Handle permission errors in this Python environment. This Python interpreter runs inside a security sandbox that restricts filesystem access. Use this skill when a file, I/O, or subprocess operation fails with "Operation not permitted", "Permission denied", EACCES, or EPERM.
+description: Resolves sandbox permission errors in this Python environment. Use when a file, I/O, network, or subprocess operation fails with "Operation not permitted", "Permission denied", EACCES, EPERM, or a network connection is blocked. Also use when the user asks how to grant a path, change the sandbox profile, or configure what their Python code can access.
 version: 1.0.0
 platforms: [macos, linux]
 ---
 
-**On any EPERM / EACCES / "Operation not permitted" failure in Python:** do NOT suggest `sudo`, `chmod`, or system permission changes. The sandbox is OS-enforced — retries, workarounds, or alternative paths hit the same boundary. The correct fix is to extend the profile and restart Python.
+# Skill: python-sandbox
 
-# Working inside a sandboxed Python environment
+The Python interpreter in this environment is a sandboxed build powered by [nono](https://docs.nono.sh). It enforces filesystem and network limits at the OS level (Seatbelt on macOS, Landlock on Linux) — kernel-enforced boundaries that cannot be bypassed from inside Python.
 
-This Python interpreter runs inside a security sandbox that enforces filesystem and network limits at the OS level (Landlock on Linux, Seatbelt on macOS). These are kernel-enforced boundaries — no amount of retrying or code changes inside Python can grant access that the sandbox hasn't permitted.
+**You do not run nono yourself.** Run Python the normal way (`python script.py`, `pytest`, `jupyter lab`). The launcher applies the active sandbox profile automatically. **Never prefix with `nono run`** — that double-wraps and breaks the active profile.
+
+The `nono` profile CLI is available in this environment for validating and inspecting profiles.
 
 ## Identifying a sandbox denial
 
-The denial signature on a failed file or I/O operation:
-
-- `PermissionError: [Errno 1] Operation not permitted`
-- `PermissionError: [Errno 13] Permission denied`
-- `OSError: [Errno 1] Operation not permitted`
-- `EACCES` / `EPERM` in tracebacks
+```
+PermissionError: [Errno 1] Operation not permitted
+PermissionError: [Errno 13] Permission denied
+OSError: [Errno 1] Operation not permitted
+```
 
 When you see any of these, it is a sandbox boundary. Do NOT suggest:
 
 - `sudo`, `chmod`, `chown`
 - System Settings / Privacy & Security / Full Disk Access
 - Retrying the same operation
-- Using a different path that resolves to the same denied location
+- A different path that resolves to the same denied location
 
-## How the sandbox profile is chosen
+The fix is always: **extend the profile → validate → wire → restart Python.**
 
-The profile name is resolved in this order:
+Network connection errors (`[Errno 1] Operation not permitted` on a socket call, or a blocked outbound connection) may indicate a network sandbox denial. If the user is trying to reach an API that needs a credential, use the `env-secrets` skill instead of this one.
 
-1. `CONDA_PYTHON_PROFILE` environment variable (if set at launch time)
-2. `$PREFIX/conda-meta/state` JSON file, `env_vars.CONDA_PYTHON_PROFILE` key
-3. Built-in default: `intentionally-left-nil/python`
+## Workflow
 
-`$PREFIX` is the conda environment root (e.g. `/Users/you/miniconda3/envs/myenv`).
+```
+Checklist:
+- [ ] Step 1: Read the live cap file to see what is actually granted
+- [ ] Step 2: Create or extend the profile with the missing path
+- [ ] Step 3: Validate the profile
+- [ ] Step 4: Wire the conda environment to the profile
+- [ ] Step 5: Tell the user to restart Python
+```
 
-## Diagnosing — read the live capability set first
+## Step 1: Read the live cap file
 
-**Always read the cap file before drafting a fix.** It contains the exact grants in effect for this session — do not guess from the profile name.
+**Always do this before editing anything.** The cap file shows every grant in effect for the running session — do not guess from the profile name.
 
 ```python
 import os, json
@@ -52,71 +58,108 @@ else:
     print("NONO_CAP_FILE not set — not running inside a sandbox session")
 ```
 
-The cap file lists every allowed path, access mode (read / write / readwrite), and network rules. Use it to confirm whether the denied path is absent from the grants or covered by a deny rule.
+Confirm the denied path is absent from the grants (or covered by a deny rule) before proceeding.
 
-## How to grant access to a new path
+## Step 2: Create or extend the profile
 
-Profile changes take effect on the **next Python startup** — they do not affect the running sandbox. Tell the user they will need to restart Python after making changes.
+Profiles are JSON files at `~/.config/nono/profiles/<name>.json`.
 
-### Step 1 — Create or extend a profile
+**If `CONDA_PYTHON_PROFILE` is set to something other than `intentionally-left-nil/python`**, extend that profile instead of the base. Check with:
 
-Create `~/.config/nono/profiles/<chosen-name>.json` extending the active profile. For example, to grant read+write access to `~/data`:
+```bash
+python -c "import os; print(os.environ.get('CONDA_PYTHON_PROFILE', 'not set'))"
+```
 
+**Grant a directory** (read+write):
 ```json
 {
   "extends": "intentionally-left-nil/python",
-  "meta": { "name": "<chosen-name>", "version": "1.0.0" },
+  "meta": { "name": "my-profile", "version": "1.0.0" },
   "filesystem": {
     "allow": ["$HOME/data"]
   }
 }
 ```
 
-For a single file rather than a directory, use `"allow_file"` / `"read_file"` / `"write_file"`:
-
+**Grant a single file:**
 ```json
 {
   "extends": "intentionally-left-nil/python",
-  "meta": { "name": "<chosen-name>", "version": "1.0.0" },
+  "meta": { "name": "my-profile", "version": "1.0.0" },
   "filesystem": {
     "allow_file": ["$HOME/output.csv"]
   }
 }
 ```
 
-If the user already has a custom profile (i.e. `CONDA_PYTHON_PROFILE` is set to something other than `intentionally-left-nil/python`), extend that profile instead.
-
 Filesystem field reference:
-- `"allow"` — read+write on a directory
-- `"read"` — read-only on a directory
-- `"write"` — write-only on a directory (rare)
-- `"allow_file"` — read+write on a single file
-- `"read_file"` — read-only on a single file
-- `"write_file"` — write-only on a single file
 
-### Step 2 — Point the conda environment at the new profile
+| Field | Access |
+|---|---|
+| `allow` | read+write on a directory |
+| `read` | read-only on a directory |
+| `write` | write-only on a directory |
+| `allow_file` | read+write on a single file |
+| `read_file` | read-only on a single file |
+| `write_file` | write-only on a single file |
 
-Use `conda env config vars set` to write the profile name into `conda-meta/state`:
+Use `$HOME`, `$WORKDIR`, `$TMPDIR` in paths — do not hardcode absolute paths. For network access, credential injection, or environment variable configuration, see the `env-secrets` skill.
+
+## Step 3: Validate the profile
+
+After every edit, validate before wiring. A profile that fails validation will prevent Python from starting.
 
 ```bash
-conda env config vars set -p /path/to/env CONDA_PYTHON_PROFILE=<chosen-name>
+nono profile validate ~/.config/nono/profiles/<name>.json
 ```
 
-Where `/path/to/env` is the conda environment prefix (the value of `$CONDA_PREFIX` or `$PREFIX`).
+To inspect the fully resolved profile after inheritance:
 
-This writes `{"env_vars": {"CONDA_PYTHON_PROFILE": "<chosen-name>"}}` to `$PREFIX/conda-meta/state`, which the nono python-launcher reads on next startup.
+```bash
+nono profile show <name>
+```
 
-### Step 3 — Restart Python
+Fix any reported errors and re-run validation before proceeding.
 
-The new profile is only applied at startup when the launcher re-execs the sandbox. Restart the Python process (kernel, script, REPL, or notebook) to pick up the change.
+## Step 4: Wire the conda environment
+
+The active profile is controlled by `CONDA_PYTHON_PROFILE` in the conda environment's `conda-meta/state`. Write it with:
+
+```bash
+conda env config vars set -p /path/to/env CONDA_PYTHON_PROFILE=<name>
+```
+
+Where `/path/to/env` is `$CONDA_PREFIX` (the conda environment root).
+
+**If `conda env config vars` is not available**, write the state file directly:
+
+```bash
+python -c "
+import json, os, pathlib
+prefix = os.environ.get('CONDA_PREFIX')
+if not prefix:
+    print('CONDA_PREFIX not set — activate the environment first')
+else:
+    state = pathlib.Path(prefix) / 'conda-meta' / 'state'
+    data = json.loads(state.read_text()) if state.exists() else {}
+    data.setdefault('env_vars', {})['CONDA_PYTHON_PROFILE'] = '<name>'
+    state.write_text(json.dumps(data, indent=2))
+    print('Written:', state)
+"
+```
+
+## Step 5: Restart Python
+
+Profile changes take effect at next interpreter startup — not in the running process.
 
 ```
 Restart Python now to apply the new sandbox profile.
 ```
 
-## What you should NOT do
+## What you must NOT do
 
-- Do not retry the failing operation — the sandbox is OS-enforced and the retry will fail identically.
-- Do not suggest modifying `$PREFIX/conda-meta/state` by hand — use `conda env config vars set`.
-- Do not edit any file under `~/.config/nono/packages/` — pack artifacts are cryptographically signed and the signature is verified at launch. Editing them will cause Python to fail to start.
-- Do not tell the user the change will take effect immediately — it requires a Python restart.
+- **Do not prefix Python invocations with `nono run`** — the interpreter is already wrapped. Run `python script.py` as normal.
+- **Do not suggest `sudo`, `chmod`, `chown`** — the sandbox is kernel-enforced; these have no effect on it.
+- **Do not edit files under `~/.config/nono/packages/`** — pack artifacts are cryptographically signed; editing them causes Python to fail to start.
+- **Do not tell the user the change takes effect immediately** — it requires a Python restart.
+- **Do not retry the failing operation** — sandbox denials are deterministic; the retry will fail identically.
